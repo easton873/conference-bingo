@@ -69,12 +69,15 @@ def fetch_talk(url: str) -> tuple[str, str, str] | None:
     h1 = soup.find("h1")
     if not h1:
         return None
-    title = h1.get_text(strip=True)
+    title = h1.get_text(strip=True).replace("\xa0", " ")
 
     author_tag = soup.find(class_="author-name")
     if not author_tag:
         return None
-    speaker = author_tag.get_text(strip=True)
+    speaker = author_tag.get_text(strip=True).replace("\xa0", " ")
+
+    if speaker.lower().startswith("presented by"):
+        return None
 
     body_block = soup.find(class_="body-block")
     if not body_block:
@@ -82,7 +85,7 @@ def fetch_talk(url: str) -> tuple[str, str, str] | None:
 
     paragraphs = []
     for p in body_block.find_all("p"):
-        text = p.get_text(separator=" ", strip=True)
+        text = p.get_text(separator=" ", strip=True).replace("\xa0", " ")
         if text:
             paragraphs.append(text)
 
