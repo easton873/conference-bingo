@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Conference Bingo</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      background: #1a1a2e;
+      color: #eee;
+      font-family: 'Segoe UI', sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+    }
+
+    h1 {
+      font-size: 2rem;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      color: #f0c040;
+      margin-bottom: 12px;
+      text-shadow: 0 0 16px #f0c04088;
+    }
+
+    #controls {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    #controls label {
+      font-size: 0.9rem;
+      color: #aaa;
+    }
+
+    #file-input {
+      display: none;
+    }
+
+    .btn {
+      background: #f0c040;
+      color: #1a1a2e;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 18px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+    }
+
+    .btn:hover { background: #ffd966; }
+    .btn:active { transform: scale(0.96); }
+
+    .btn-secondary {
+      background: transparent;
+      color: #f0c040;
+      border: 2px solid #f0c040;
+    }
+
+    .btn-secondary:hover { background: #f0c04022; }
+
+    #word-source-label {
+      font-size: 0.85rem;
+      color: #888;
+      font-style: italic;
+    }
+
+    #board {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 6px;
+      width: min(95vw, 520px);
+    }
+
+    .cell {
+      position: relative;
+      aspect-ratio: 1;
+      border-radius: 10px;
+      overflow: hidden;
+      cursor: pointer;
+      border: 2px solid #333;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .cell:hover { border-color: #f0c040; }
+
+    /* Background image layer */
+    .cell-bg {
+      position: absolute;
+      inset: 0;
+      background-size: cover;
+      background-position: center;
+      background-color: #16213e;
+      /* images set inline via JS; fallback gradient */
+      background-image: linear-gradient(135deg, #16213e 0%, #0f3460 100%);
+    }
+
+    /* Semi-transparent overlay so text always readable */
+    .cell-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(15, 20, 50, 0.55);
+    }
+
+    /* Word label */
+    .cell-label {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 6px;
+      font-size: clamp(0.6rem, 2.2vw, 0.85rem);
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      color: #fff;
+      text-shadow: 0 1px 4px #000, 0 0 8px #000;
+      line-height: 1.2;
+    }
+
+    /* FREE square */
+    .cell.free .cell-bg {
+      background-image: linear-gradient(135deg, #0f3460 0%, #533483 100%);
+    }
+
+    .cell.free .cell-label {
+      color: #f0c040;
+      font-size: clamp(0.7rem, 2.5vw, 1rem);
+    }
+
+    /* Marked state */
+    .cell.marked .cell-overlay {
+      background: rgba(240, 192, 64, 0.7);
+    }
+
+    .cell.marked .cell-label {
+      color: #1a1a2e;
+      text-shadow: none;
+    }
+
+    .cell.marked::after {
+      content: '✓';
+      position: absolute;
+      top: 4px;
+      right: 6px;
+      font-size: 1rem;
+      color: #1a1a2e;
+      font-weight: 900;
+    }
+
+    /* Bingo winning cells highlight */
+    .cell.winning {
+      border-color: #ff4d6d;
+      box-shadow: 0 0 12px #ff4d6d88;
+      animation: pulse-win 0.8s ease-in-out infinite alternate;
+    }
+
+    @keyframes pulse-win {
+      from { box-shadow: 0 0 8px #ff4d6d88; }
+      to   { box-shadow: 0 0 22px #ff4d6dcc; }
+    }
+
+    /* Bingo banner */
+    #bingo-banner {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: #f0c040;
+      color: #1a1a2e;
+      font-size: clamp(2rem, 10vw, 5rem);
+      font-weight: 900;
+      letter-spacing: 12px;
+      padding: 20px 50px;
+      border-radius: 20px;
+      z-index: 1000;
+      text-transform: uppercase;
+      box-shadow: 0 8px 40px #00000088;
+      animation: pop-in 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
+      cursor: pointer;
+    }
+
+    @keyframes pop-in {
+      from { transform: translate(-50%, -50%) scale(0.3); opacity: 0; }
+      to   { transform: translate(-50%, -50%) scale(1);   opacity: 1; }
+    }
+
+    /* Confetti canvas */
+    #confetti-canvas {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 999;
+    }
+
+    #status {
+      margin-top: 16px;
+      font-size: 0.85rem;
+      color: #888;
+      min-height: 1.2em;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Bingo</h1>
+
+  <div id="controls">
+    <button class="btn" onclick="document.getElementById('file-input').click()">Load Word List</button>
+    <input type="file" id="file-input" accept=".txt" />
+    <button class="btn btn-secondary" id="new-game-btn">New Card</button>
+    <span id="word-source-label">Using: sample.txt</span>
+  </div>
+
+  <div id="board"></div>
+  <div id="status"></div>
+
+  <div id="bingo-banner" onclick="dismissBanner()">BINGO!</div>
+  <canvas id="confetti-canvas"></canvas>
+
+  <script>
+    // ── State ──────────────────────────────────────────────────────────────────
+    let wordPool = [];
+    let currentWords = [];      // 25 slots; null = FREE center
+    let markedCells = new Set();
+    let bingoLines = new Set(); // which line indices have already triggered
+    let confettiActive = false;
+    let confettiFrame = null;
+    let confettiParticles = [];
+    let sourceName = 'sample.txt';
+
+    // ── Boot ───────────────────────────────────────────────────────────────────
+    loadDefaultWords();
+
+    async function loadDefaultWords() {
+      try {
+        const resp = await fetch('sample.txt');
+        if (!resp.ok) throw new Error();
+        const text = await resp.text();
+        parseWords(text, 'sample.txt');
+      } catch {
+        // Fallback built-in list if fetch fails (e.g. opened as file://)
+        parseWords([
+          'synergy','leverage','disruptive','innovation','scalable',
+          'agile','blockchain','paradigm','ecosystem','bandwidth',
+          'pivot','deep dive','circle back','stakeholders','deliverables',
+          'alignment','velocity','roadmap','sprint','ideation',
+          'framework','holistic','streamline','transparency','empower',
+          'collaborate','optimize','robust','mission-critical'
+        ].join('\n'), 'built-in');
+      }
+    }
+
+    function parseWords(text, name) {
+      const words = text.split('\n')
+        .map(w => w.trim())
+        .filter(w => w.length > 0);
+      if (words.length < 24) {
+        setStatus(`⚠️ Need at least 24 words; "${name}" only has ${words.length}.`);
+        return;
+      }
+      wordPool = words;
+      sourceName = name;
+      document.getElementById('word-source-label').textContent = `Using: ${name}`;
+      buildCard();
+    }
+
+    // ── File input ─────────────────────────────────────────────────────────────
+    document.getElementById('file-input').addEventListener('change', e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = ev => parseWords(ev.target.result, file.name);
+      reader.readAsText(file);
+      e.target.value = '';
+    });
+
+    document.getElementById('new-game-btn').addEventListener('click', buildCard);
+
+    // ── Board building ─────────────────────────────────────────────────────────
+    function shuffle(arr) {
+      const a = [...arr];
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
+
+    function buildCard() {
+      stopConfetti();
+      dismissBanner();
+      markedCells.clear();
+      bingoLines.clear();
+      setStatus('');
+
+      const picked = shuffle(wordPool).slice(0, 24);
+      // Insert FREE at center (index 12)
+      currentWords = [...picked.slice(0, 12), null, ...picked.slice(12)];
+
+      renderBoard();
+    }
+
+    function renderBoard() {
+      const board = document.getElementById('board');
+      board.innerHTML = '';
+
+      currentWords.forEach((word, idx) => {
+        const cell = document.createElement('div');
+        cell.className = 'cell' + (word === null ? ' free marked' : '');
+        cell.dataset.idx = idx;
+
+        const bg = document.createElement('div');
+        bg.className = 'cell-bg';
+
+        // If an image exists for this word, set it (images live alongside index.html)
+        // Naming convention: images/<sanitized-word>.png  (optional — falls back to gradient)
+        if (word !== null) {
+          const imgName = word.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+          bg.style.backgroundImage =
+            `linear-gradient(135deg,#16213e,#0f3460), url("images/${imgName}.png")`;
+          bg.style.backgroundBlendMode = 'multiply';
+        }
+
+        const overlay = document.createElement('div');
+        overlay.className = 'cell-overlay';
+
+        const label = document.createElement('div');
+        label.className = 'cell-label';
+        label.textContent = word === null ? 'FREE' : word.toUpperCase();
+
+        cell.appendChild(bg);
+        cell.appendChild(overlay);
+        cell.appendChild(label);
+
+        if (word !== null) {
+          cell.addEventListener('click', () => toggleCell(idx));
+          cell.addEventListener('touchend', e => { e.preventDefault(); toggleCell(idx); });
+        }
+
+        if (word === null) markedCells.add(idx);
+
+        board.appendChild(cell);
+      });
+    }
+
+    // ── Cell interaction ───────────────────────────────────────────────────────
+    function toggleCell(idx) {
+      if (currentWords[idx] === null) return; // FREE always stays marked
+
+      const cell = document.querySelector(`.cell[data-idx="${idx}"]`);
+      if (markedCells.has(idx)) {
+        markedCells.delete(idx);
+        cell.classList.remove('marked');
+      } else {
+        markedCells.add(idx);
+        cell.classList.add('marked');
+        checkBingo();
+      }
+    }
+
+    // ── Win detection ──────────────────────────────────────────────────────────
+    const LINES = (() => {
+      const lines = [];
+      // Rows
+      for (let r = 0; r < 5; r++) lines.push([0,1,2,3,4].map(c => r*5+c));
+      // Cols
+      for (let c = 0; c < 5; c++) lines.push([0,1,2,3,4].map(r => r*5+c));
+      // Diagonals
+      lines.push([0,6,12,18,24]);
+      lines.push([4,8,12,16,20]);
+      return lines;
+    })();
+
+    function checkBingo() {
+      let newBingo = false;
+      LINES.forEach((line, li) => {
+        if (bingoLines.has(li)) return;
+        if (line.every(i => markedCells.has(i))) {
+          bingoLines.add(li);
+          newBingo = true;
+          line.forEach(i => {
+            document.querySelector(`.cell[data-idx="${i}"]`).classList.add('winning');
+          });
+        }
+      });
+      if (newBingo) triggerBingo();
+    }
+
+    // ── Bingo celebration ──────────────────────────────────────────────────────
+    function triggerBingo() {
+      document.getElementById('bingo-banner').style.display = 'block';
+      startConfetti();
+      setStatus('Tap the banner to dismiss.');
+    }
+
+    function dismissBanner() {
+      document.getElementById('bingo-banner').style.display = 'none';
+      stopConfetti();
+      setStatus('');
+    }
+
+    // ── Confetti ───────────────────────────────────────────────────────────────
+    const COLORS = ['#f0c040','#ff4d6d','#4cc9f0','#7209b7','#06d6a0','#ff6b35','#fff'];
+
+    function startConfetti() {
+      if (confettiActive) return;
+      confettiActive = true;
+      const canvas = document.getElementById('confetti-canvas');
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      confettiParticles = Array.from({length: 160}, () => makeParticle(canvas));
+      animateConfetti();
+    }
+
+    function stopConfetti() {
+      confettiActive = false;
+      if (confettiFrame) { cancelAnimationFrame(confettiFrame); confettiFrame = null; }
+      const canvas = document.getElementById('confetti-canvas');
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      confettiParticles = [];
+    }
+
+    function makeParticle(canvas) {
+      return {
+        x: Math.random() * canvas.width,
+        y: Math.random() * -canvas.height,
+        w: 8 + Math.random() * 10,
+        h: 5 + Math.random() * 6,
+        color: COLORS[Math.floor(Math.random() * COLORS.length)],
+        angle: Math.random() * Math.PI * 2,
+        spin: (Math.random() - 0.5) * 0.2,
+        vx: (Math.random() - 0.5) * 3,
+        vy: 3 + Math.random() * 4,
+      };
+    }
+
+    function animateConfetti() {
+      if (!confettiActive) return;
+      const canvas = document.getElementById('confetti-canvas');
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      confettiParticles.forEach(p => {
+        p.x  += p.vx;
+        p.y  += p.vy;
+        p.angle += p.spin;
+
+        if (p.y > canvas.height + 20) {
+          // Recycle from top
+          p.x = Math.random() * canvas.width;
+          p.y = -20;
+          p.vy = 3 + Math.random() * 4;
+        }
+
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.angle);
+        ctx.fillStyle = p.color;
+        ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+        ctx.restore();
+      });
+
+      confettiFrame = requestAnimationFrame(animateConfetti);
+    }
+
+    window.addEventListener('resize', () => {
+      if (!confettiActive) return;
+      const canvas = document.getElementById('confetti-canvas');
+      canvas.width  = window.innerWidth;
+      canvas.height = window.innerHeight;
+    });
+
+    // ── Helpers ────────────────────────────────────────────────────────────────
+    function setStatus(msg) {
+      document.getElementById('status').textContent = msg;
+    }
+  </script>
+</body>
+</html>
