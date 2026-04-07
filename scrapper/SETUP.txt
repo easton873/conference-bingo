@@ -1,0 +1,23 @@
+SETUP & USAGE
+=============
+
+1. Create and activate a virtual environment (first time only):
+
+    python3 -m venv .venv
+    source .venv/bin/activate
+    pip install -r requirements.txt
+
+2. Activate the virtual environment (every new terminal session):
+
+    source .venv/bin/activate
+
+3. Run the scraper:
+
+    python scrape_conference.py <year> <april|october>
+
+    Examples:
+        python scrape_conference.py 2025 october
+        python scrape_conference.py 2020 april
+
+Output will be saved to a directory named like "October 2025/" or "April 2020/",
+with one .txt file per talk named "{Talk Title} - {Speaker Name}.txt".
